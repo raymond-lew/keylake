@@ -33,8 +33,8 @@ class BaseAgent(ABC):
 
     async def think(self, prompt: str) -> str:
         """Use LLM to reason about a task"""
-        response = await self.llm.agenerate([prompt])
-        return response.generations[0][0].text
+        response = await self.llm.ainvoke(prompt)
+        return response.content
 
     async def use_tool(self, tool_name: str, **kwargs) -> Any:
         """Execute a tool from the agent's toolkit"""

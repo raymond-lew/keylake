@@ -6,10 +6,19 @@ from sqlalchemy.pool import NullPool
 import os
 
 # Database configuration
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://crm_user:crm_password@localhost:5432/ai_crm"
-)
+# Using psycopg2 for SQLAlchemy compatibility (lightweight, no torch)
+# Option 1: Use full DATABASE_URL
+# Option 2: Build from individual components
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    DB_USER = os.getenv("DB_USER", "new_username")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "your_password")
+    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_PORT = os.getenv("DB_PORT", "5432")
+    DB_NAME = os.getenv("DB_NAME", "mydatabase")
+    
+    DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Create engine
 engine = create_engine(

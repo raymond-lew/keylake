@@ -10,9 +10,8 @@ from database.models import Base, Contact, Deal, Customer, Email, Meeting
 from database.connection import engine, get_db
 from api import leads, deals, customers, emails, meetings, analytics
 from workflows.orchestrator import AgentOrchestrator
-
-# Create database tables
-Base.metadata.create_all(bind=engine)
+from agents.task_queue import task_queue, init_task_queue
+from agents import worker  # Initialize tasks
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -29,6 +28,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Create database tables on startup (non-blocking)
+@app.on_event("startup")
+async def startup_event():
+    """Create database tables on application startup"""
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("✅ Database tables created successfully")
+    except Exception as e:
+        print(f"⚠️  Database connection failed (tables will be created on first use): {e}")
+    
+    # Initialize task queue (SQLite-based, no Redis required)
+    init_task_queue()
 
 # Initialize agent orchestrator
 orchestrator = AgentOrchestrator()
@@ -56,7 +68,7 @@ async def health_check():
         "api": "healthy",
         "database": "connected",
         "agents": orchestrator.get_agent_status(),
-        "redis": "connected"  # If using Redis
+        "task_queue": task_queue.get_stats()
     }
 
 
@@ -79,76 +91,51 @@ app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"]
 @app.post("/api/agents/qualify-lead")
 async def qualify_lead(
     lead_data: Dict[str, Any],
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Trigger Lead Qualification Agent"""
-    background_tasks.add_task(
-        orchestrator.process_new_lead,
-        lead_data,
-        db
-    )
-    return {"status": "processing", "message": "Lead qualification started"}
+    task_id = worker.process_lead.delay(lead_data)
+    return {"status": "queued", "task_id": task_id, "message": "Lead qualification queued"}
 
 
 @app.post("/api/agents/analyze-email")
 async def analyze_email(
     email_data: Dict[str, Any],
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Trigger Email Intelligence Agent"""
-    background_tasks.add_task(
-        orchestrator.process_email,
-        email_data,
-        db
-    )
-    return {"status": "processing", "message": "Email analysis started"}
+    task_id = worker.process_email.delay(email_data)
+    return {"status": "queued", "task_id": task_id, "message": "Email analysis queued"}
 
 
 @app.post("/api/agents/analyze-deal/{deal_id}")
 async def analyze_deal(
     deal_id: str,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Trigger Sales Pipeline Agent"""
-    background_tasks.add_task(
-        orchestrator.analyze_deal,
-        deal_id,
-        db
-    )
-    return {"status": "processing", "message": "Deal analysis started"}
+    task_id = worker.analyze_deal.delay(deal_id)
+    return {"status": "queued", "task_id": task_id, "message": "Deal analysis queued"}
 
 
 @app.post("/api/agents/monitor-customer/{customer_id}")
 async def monitor_customer(
     customer_id: str,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Trigger Customer Success Agent"""
-    background_tasks.add_task(
-        orchestrator.monitor_customer,
-        customer_id,
-        db
-    )
-    return {"status": "processing", "message": "Customer monitoring started"}
+    task_id = worker.monitor_customer.delay(customer_id)
+    return {"status": "queued", "task_id": task_id, "message": "Customer monitoring queued"}
 
 
 @app.post("/api/agents/schedule-meeting")
 async def schedule_meeting(
     meeting_request: Dict[str, Any],
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Trigger Meeting Scheduler Agent"""
-    background_tasks.add_task(
-        orchestrator.schedule_meeting,
-        meeting_request,
-        db
-    )
-    return {"status": "processing", "message": "Meeting scheduling started"}
+    task_id = worker.schedule_meeting.delay(meeting_request)
+    return {"status": "queued", "task_id": task_id, "message": "Meeting scheduling queued"}
 
 
 @app.post("/api/agents/generate-dashboard")
@@ -168,31 +155,21 @@ async def generate_dashboard(
 @app.post("/webhooks/email-received")
 async def email_webhook(
     email_data: Dict[str, Any],
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Webhook for incoming emails"""
-    background_tasks.add_task(
-        orchestrator.process_email,
-        email_data,
-        db
-    )
-    return {"status": "received"}
+    task_id = worker.process_email.delay(email_data)
+    return {"status": "received", "task_id": task_id}
 
 
 @app.post("/webhooks/form-submission")
 async def form_webhook(
     form_data: Dict[str, Any],
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Webhook for form submissions (new leads)"""
-    background_tasks.add_task(
-        orchestrator.process_new_lead,
-        form_data,
-        db
-    )
-    return {"status": "received"}
+    task_id = worker.process_lead.delay(form_data)
+    return {"status": "received", "task_id": task_id}
 
 
 # ============================================================================

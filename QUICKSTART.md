@@ -19,18 +19,25 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-### 2. Configure API Keys
+### 2. Configure Ollama (Llama 3.2:3b)
 
-Edit `.env` file with your credentials:
-
+**Install Ollama** (if not already installed):
 ```bash
-# Required: Add your LLM API key
-OPENAI_API_KEY=sk-your-key-here
-# OR
-ANTHROPIC_API_KEY=sk-ant-your-key-here
+# Linux/macOS
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull Llama 3.2:3b model
+ollama pull llama3.2:3b
+```
+
+**Edit `.env` file**:
+```bash
+# LLM Configuration (Ollama - Llama 3.2:3b)
+OLLAMA_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.2:3b
 
 # Database (default is fine for local dev)
-DATABASE_URL=postgresql://crm_user:crm_password@localhost:5432/ai_crm
+DATABASE_URL=postgresql://crm_user:crm_password@localhost:5432/mydatabase
 ```
 
 ### 3. Start the Server
@@ -227,7 +234,7 @@ llm = Anthropic(temperature=0.7, model="claude-3-opus-20240229")
 
 Default PostgreSQL connection:
 ```
-postgresql://crm_user:crm_password@localhost:5432/ai_crm
+postgresql://crm_user:crm_password@localhost:5432/mydatabase
 ```
 
 Change in `.env` file if needed.
@@ -297,8 +304,8 @@ gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker
 sudo systemctl status postgresql
 
 # Reset database
-dropdb ai_crm
-createdb ai_crm
+dropdb mydatabase
+createdb mydatabase
 python -c "from database.models import Base; from database.connection import engine; Base.metadata.create_all(bind=engine)"
 ```
 

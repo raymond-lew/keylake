@@ -42,23 +42,21 @@ class AgentOrchestrator:
         }
 
     def _init_llm(self):
-        """Initialize LLM client"""
-        # Placeholder - implement with actual LLM
-        # Example: from langchain.llms import OpenAI
-        # return OpenAI(temperature=0.7)
-
-        # For now, return a mock object
-        class MockLLM:
-            async def agenerate(self, prompts):
-                class Generation:
-                    def __init__(self):
-                        self.text = "Mock LLM response"
-                class Generations:
-                    def __init__(self):
-                        self.generations = [[Generation()]]
-                return Generations()
-
-        return MockLLM()
+        """Initialize LLM client using Ollama with Llama 3.2:3b"""
+        from langchain_ollama import ChatOllama
+        import os
+        
+        ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+        llm_model = os.getenv("LLM_MODEL", "llama3.2:3b")
+        
+        # Initialize Ollama LLM
+        llm = ChatOllama(
+            base_url=ollama_base_url,
+            model=llm_model,
+            temperature=0.7,
+        )
+        
+        return llm
 
     def get_agent_status(self) -> Dict[str, str]:
         """Get status of all agents"""

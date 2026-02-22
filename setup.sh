@@ -25,9 +25,9 @@ echo "Creating database and user..."
 
 # Create database (modify credentials as needed)
 sudo -u postgres psql << EOF
-CREATE DATABASE ai_crm;
+CREATE DATABASE mydatabase;
 CREATE USER crm_user WITH ENCRYPTED PASSWORD 'crm_password';
-GRANT ALL PRIVILEGES ON DATABASE ai_crm TO crm_user;
+GRANT ALL PRIVILEGES ON DATABASE mydatabase TO crm_user;
 EOF
 
 echo "Database created successfully!"
@@ -41,7 +41,7 @@ echo ""
 echo "Creating .env file..."
 cat > .env << EOF
 # Database
-DATABASE_URL=postgresql://crm_user:crm_password@localhost:5432/ai_crm
+DATABASE_URL=postgresql://crm_user:crm_password@localhost:5432/mydatabase
 
 # LLM API Keys
 OPENAI_API_KEY=your_openai_key_here

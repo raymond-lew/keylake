@@ -75,20 +75,19 @@ An intelligent CRM system that uses autonomous AI agents to handle customer rela
 
 **Backend:**
 - Python + FastAPI
-- PostgreSQL database
-- Redis for caching
-- Celery for async tasks
+- SQLite/PostgreSQL database
+- SQLite-based task queue (async workflows)
 
 **AI/ML:**
 - LangChain for agent orchestration
-- Claude/GPT-4 for intelligence
-- Vector DB for context storage
+- Ollama for local LLM inference
+- ChromaDB for vector storage
 - Sentiment analysis models
 
 **Frontend:**
 - React + TypeScript
 - TailwindCSS
-- Real-time updates (WebSocket)
+- Real-time updates
 - Charts & analytics
 
 **Integrations:**
@@ -157,26 +156,22 @@ pip install -r requirements.txt
 # Setup database
 python setup_db.py
 
-# Run migrations
-alembic upgrade head
+# Start backend (includes SQLite task queue)
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
 
-# Start backend
-uvicorn main:app --reload
-
-# Start agent workers
-celery -A agents.worker worker --loglevel=info
-
-# Start frontend
+# Start frontend 
 cd frontend && npm start
 ```
+
+**Note:** No Redis required! The system uses SQLite-based task queuing by default.
 
 ## 🔄 Agent Communication
 
 Agents communicate via:
-- **Message Queue** (RabbitMQ/Redis)
-- **Shared State** (Redis)
-- **Event Bus** (pub/sub)
-- **API Calls** (RESTful)
+- **SQLite Task Queue** - Persistent task storage
+- **Background Worker Thread** - Async task execution
+- **Shared Database** - State persistence
+- **API Calls** - RESTful endpoints
 
 ## 📈 Scaling
 
