@@ -52,20 +52,20 @@ google-api-python-client
 
 # Utilities
 python-dotenv
-pydantic-settings
-python-jose[cryptography]
-passlib[bcrypt]
+#pydantic-settings
+#python-jose[cryptography]
+#passlib[bcrypt]
 
 # Monitoring & Logging
-loguru
-sentry-sdk
+#loguru
+#sentry-sdk
 
 # Testing
-pytest
-pytest-asyncio
-httpx
+#pytest
+#pytest-asyncio
+#httpx
 
 # Development
-black
-flake8
-mypy
+#black
+#flake8
+#mypy
