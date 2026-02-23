@@ -1,26 +1,26 @@
 # FastAPI Backend
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
-pydantic==2.5.0
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
 
 # Database
 # Using psycopg2-binary for SQLAlchemy dialect (lightweight, no torch)
 # psycopg[binary] is used for actual connections, psycopg2-binary for SQLAlchemy compatibility
-sqlalchemy==2.0.36
-psycopg[binary]==3.1.14
-psycopg2-binary==2.9.9  # For SQLAlchemy dialect compatibility
-alembic==1.12.1
+sqlalchemy
+psycopg[binary]
+psycopg2-binary  # For SQLAlchemy dialect compatibility
+alembic
 
 # AI/ML
 langchain
 langchain-ollama
 ollama
-tiktoken==0.5.1
+tiktoken
 
 # Vector Database (for agent memory)
 # ChromaDB includes lightweight ONNX-based embeddings (no torch required)
-chromadb==0.4.18
+chromadb
 
 # Optional: For custom embeddings without torch, use:
 # sentence-transformers-lite==2.2.2  # Uses ONNX runtime instead of torch
@@ -31,41 +31,41 @@ chromadb==0.4.18
 # Note: SQLite-based queue is used by default. Install Redis/Celery only if needed.
 
 # HTTP & API
-requests==2.31.0
-httpx==0.25.2
-aiohttp==3.9.1
+requests
+httpx
+aiohttp
 
 # Data Processing
 pandas
 #pandas==2.2.0
-numpy==1.26.4
+numpy
 
 # Email Integration
-imap-tools==1.5.0
-email-validator==2.1.0
+imap-tools
+email-validator
 
 # Calendar Integration
-google-auth==2.25.2
-google-auth-oauthlib==1.1.0
-google-auth-httplib2==0.2.0
-google-api-python-client==2.108.0
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
 
 # Utilities
-python-dotenv==1.0.0
-pydantic-settings==2.1.0
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+python-dotenv
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
 
 # Monitoring & Logging
-loguru==0.7.2
-sentry-sdk==1.38.0
+loguru
+sentry-sdk
 
 # Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
-httpx==0.25.2
+pytest
+pytest-asyncio
+httpx
 
 # Development
-black==23.11.0
-flake8==6.1.0
-mypy==1.7.1
+black
+flake8
+mypy
