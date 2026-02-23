@@ -1,71 +1,13 @@
-# FastAPI Backend
-fastapi
-uvicorn[standard]
-python-multipart
-pydantic
-
-# Database
-# Using psycopg2-binary for SQLAlchemy dialect (lightweight, no torch)
-# psycopg[binary] is used for actual connections, psycopg2-binary for SQLAlchemy compatibility
-sqlalchemy
-psycopg[binary]
-psycopg2-binary  # For SQLAlchemy dialect compatibility
-alembic
-
-# AI/ML
-langchain
-langchain-ollama
-ollama
-tiktoken
-
-# Vector Database (for agent memory)
-# ChromaDB includes lightweight ONNX-based embeddings (no torch required)
-chromadb
-
-# Optional: For custom embeddings without torch, use:
-# sentence-transformers-lite==2.2.2  # Uses ONNX runtime instead of torch
-
-# Caching & Queue (Optional - requires Redis server)
-# redis==5.0.1
-# celery==5.3.4
-# Note: SQLite-based queue is used by default. Install Redis/Celery only if needed.
-
-# HTTP & API
-requests
-httpx
-aiohttp
+# Streamlit Frontend
+streamlit
 
 # Data Processing
 pandas
-#pandas==2.2.0
 numpy
 
-# Email Integration
-imap-tools
-email-validator
-
-# Calendar Integration
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
-google-api-python-client
+# HTTP & API (optional)
+requests
+httpx
 
 # Utilities
 python-dotenv
-#pydantic-settings
-#python-jose[cryptography]
-#passlib[bcrypt]
-
-# Monitoring & Logging
-#loguru
-#sentry-sdk
-
-# Testing
-#pytest
-#pytest-asyncio
-#httpx
-
-# Development
-#black
-#flake8
-#mypy
