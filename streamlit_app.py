@@ -745,7 +745,7 @@ def show_emails():
         st.metric("⚠️ High Priority", high_priority)
 
     # Main tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📥 Inbox", "✉️ Compose", "📋 Templates", "📊 Analytics"])
+    tab1, tab2, tab3 = st.tabs(["📥 Inbox", "✉️ Compose", "📋 Templates"])
 
     # ==========================================================================
     # TAB 1: INBOX VIEW
@@ -955,9 +955,11 @@ def show_emails():
                 # Get contacts for selection
                 contacts = storage.get_all_contacts()
                 contact_options = {f"{c.get('first_name')} {c.get('last_name')} ({c.get('email')})": c for c in contacts}
-                selected_contact_str = st.selectbox("To Contact", [""] + list(contact_options.keys()))
+                selected_contact_str = st.selectbox("To Contact (Optional)", [""] + list(contact_options.keys()))
                 
-                from_email = st.text_input("From Email", "sales@ourcrm.com")
+                from_email = st.text_input("From Email *", "sales@ourcrm.com")
+                # Manual recipient email field
+                manual_email = st.text_input("Or Enter Recipient Email *", "")
                 subject = st.text_input("Subject *")
 
             with c2:
@@ -966,7 +968,8 @@ def show_emails():
                 category = st.selectbox("Category", ["sales", "inquiry", "support", "partnership", "general"])
 
             # Template selector
-            template_name = st.selectbox("📋 Use Template (Optional)", [""] + [t["name"] for t in st.session_state.email_templates])
+            template_name = st.selectbox("📋 Use Template (Optional)", [""] + [t["name"] for t in st.session_state.email_templates],
+                                        key="compose_template_selector")
             
             body = st.text_area("Body *", height=200, 
                               value=st.session_state.get('compose_body', ''))
@@ -985,43 +988,54 @@ def show_emails():
             submitted = st.form_submit_button("📤 Send Email", type="primary")
 
             if submitted:
+                # Validate required fields
                 if not from_email or not subject or not body:
                     st.error("Please fill in required fields (From Email, Subject, Body)")
+                elif not selected_contact_str and not manual_email:
+                    st.error("Please select a contact OR enter a recipient email")
                 else:
                     # Get contact details
                     contact = contact_options.get(selected_contact_str) if selected_contact_str else None
                     contact_id = contact.get('id') if contact else None
-                    to_email = contact.get('email') if contact else st.text_input("Enter recipient email")
                     
-                    # Simple merge field replacement
-                    merged_body = body
-                    merged_subject = subject
+                    # Determine recipient email
                     if contact:
-                        merged_body = merged_body.replace("{{first_name}}", contact.get('first_name', ''))
-                        merged_body = merged_body.replace("{{last_name}}", contact.get('last_name', ''))
-                        company = get_company_name(contact.get('company_id'))
-                        merged_body = merged_body.replace("{{company_name}}", company)
-                        merged_body = merged_body.replace("{{job_title}}", contact.get('job_title', ''))
-                        merged_subject = merged_subject.replace("{{first_name}}", contact.get('first_name', ''))
-                        merged_subject = merged_subject.replace("{{company_name}}", company)
+                        to_email = contact.get('email', '')
+                    else:
+                        to_email = manual_email.strip()
                     
-                    merged_body = merged_body.replace("{{sender_name}}", "Sales Team")
-                    merged_subject = merged_subject.replace("{{subject}}", subject)
-                    
-                    storage.create_email(
-                        from_email=from_email,
-                        to_email=to_email if to_email else "",
-                        subject=merged_subject,
-                        body=merged_body,
-                        direction=direction,
-                        priority=priority,
-                        category=category,
-                        contact_id=contact_id,
-                        response_sent=(direction == "outbound")
-                    )
-                    st.success("✅ Email sent successfully!")
-                    st.session_state.compose_body = ''
-                    st.rerun()
+                    if not to_email:
+                        st.error("Please provide a valid recipient email")
+                    else:
+                        # Simple merge field replacement
+                        merged_body = body
+                        merged_subject = subject
+                        if contact:
+                            merged_body = merged_body.replace("{{first_name}}", contact.get('first_name', ''))
+                            merged_body = merged_body.replace("{{last_name}}", contact.get('last_name', ''))
+                            company = get_company_name(contact.get('company_id'))
+                            merged_body = merged_body.replace("{{company_name}}", company)
+                            merged_body = merged_body.replace("{{job_title}}", contact.get('job_title', ''))
+                            merged_subject = merged_subject.replace("{{first_name}}", contact.get('first_name', ''))
+                            merged_subject = merged_subject.replace("{{company_name}}", company)
+                        
+                        merged_body = merged_body.replace("{{sender_name}}", "Sales Team")
+                        merged_subject = merged_subject.replace("{{subject}}", subject)
+                        
+                        storage.create_email(
+                            from_email=from_email,
+                            to_email=to_email,
+                            subject=merged_subject,
+                            body=merged_body,
+                            direction=direction,
+                            priority=priority,
+                            category=category,
+                            contact_id=contact_id,
+                            response_sent=(direction == "outbound")
+                        )
+                        st.success("✅ Email sent successfully!")
+                        st.session_state.compose_body = ''
+                        st.rerun()
 
     # ==========================================================================
     # TAB 3: EMAIL TEMPLATES
@@ -1091,89 +1105,6 @@ def show_emails():
                         })
                         st.success(f"✅ Template '{name}' created!")
                         st.rerun()
-
-    # ==========================================================================
-    # TAB 4: EMAIL ANALYTICS
-    # ==========================================================================
-    with tab4:
-        st.subheader("📊 Email Analytics")
-
-        all_emails = storage.get_all_emails(limit=500)
-        
-        # Metrics
-        c1, c2, c3, c4, c5 = st.columns(5)
-        
-        total = len(all_emails)
-        inbound = len([e for e in all_emails if e.get('direction') == 'inbound'])
-        outbound = len([e for e in all_emails if e.get('direction') == 'outbound'])
-        responded = len([e for e in all_emails if e.get('response_sent')])
-        high_priority = len([e for e in all_emails if e.get('priority') == 'high'])
-        
-        response_rate = (responded / inbound * 100) if inbound > 0 else 0
-        
-        with c1:
-            st.metric("Total Emails", total)
-        with c2:
-            st.metric("Inbound", inbound)
-        with c3:
-            st.metric("Outbound", outbound)
-        with c4:
-            st.metric("Response Rate", f"{response_rate:.1f}%")
-        with c5:
-            st.metric("High Priority", high_priority)
-        
-        st.divider()
-        
-        # Charts
-        c1, c2 = st.columns(2)
-        
-        with c1:
-            st.subheader("Emails by Category")
-            categories = ['inquiry', 'support', 'sales', 'partnership', 'general']
-            cat_data = {cat: len([e for e in all_emails if e.get('category') == cat]) for cat in categories}
-            cat_df = pd.DataFrame({"Category": list(cat_data.keys()), "Count": list(cat_data.values())})
-            st.bar_chart(cat_df.set_index("Category"))
-        
-        with c2:
-            st.subheader("Emails by Sentiment")
-            sentiments = ['positive', 'neutral', 'negative']
-            sent_data = {s: len([e for e in all_emails if e.get('sentiment') == s]) for s in sentiments}
-            sent_df = pd.DataFrame({"Sentiment": list(sent_data.keys()), "Count": list(sent_data.values())})
-            st.bar_chart(sent_df.set_index("Sentiment"))
-        
-        st.divider()
-        
-        # Priority breakdown
-        st.subheader("Priority Distribution")
-        c1, c2, c3 = st.columns(3)
-        
-        with c1:
-            high_count = len([e for e in all_emails if e.get('priority') == 'high'])
-            st.metric("🔴 High", high_count)
-        with c2:
-            med_count = len([e for e in all_emails if e.get('priority') == 'medium'])
-            st.metric("🟡 Medium", med_count)
-        with c3:
-            low_count = len([e for e in all_emails if e.get('priority') == 'low'])
-            st.metric("🟢 Low", low_count)
-        
-        st.divider()
-        
-        # Recent activity table
-        st.subheader("Recent Email Activity")
-        if all_emails:
-            recent = sorted(all_emails, key=lambda x: x.get('created_at', ''), reverse=True)[:10]
-            df_data = []
-            for e in recent:
-                df_data.append({
-                    "Date": e.get('created_at', '')[:10],
-                    "Direction": "📥" if e.get('direction') == 'inbound' else "📤",
-                    "Subject": e.get('subject', 'No Subject')[:40],
-                    "From": e.get('from_email', ''),
-                    "Priority": e.get('priority', 'medium'),
-                    "Responded": "✅" if e.get('response_sent') else "❌"
-                })
-            st.dataframe(pd.DataFrame(df_data), use_container_width=True, hide_index=True)
 
 # ============================================================================
 # MEETINGS PAGE - FULL CRUD
@@ -1619,75 +1550,246 @@ def show_meetings():
 def show_analytics():
     """Display analytics and reports"""
     st.title("📈 Analytics")
-    
-    # Key Metrics
-    total_leads = storage.count('contacts')
-    total_deals = storage.count('deals')
-    won_deals = len([d for d in storage.get_all_deals() if d.get('stage') == 'closed_won'])
-    total_customers = storage.count('customers')
-    
-    deals = storage.get_all_deals()
-    pipeline_value = sum(d.get('value', 0) for d in deals 
-                        if d.get('stage') in ['prospecting', 'qualification', 'proposal', 'negotiation'])
-    
-    customers = storage.get_all_customers()
-    total_mrr = sum(c.get('mrr', 0) for c in customers)
-    
-    win_rate = (won_deals / total_deals * 100) if total_deals > 0 else 0
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    with col1:
-        st.metric("Win Rate", f"{win_rate:.1f}%")
-    with col2:
-        st.metric("Pipeline", f"${pipeline_value/1000:.0f}K")
-    with col3:
-        st.metric("MRR", f"${total_mrr:,.0f}")
-    with col4:
-        st.metric("Avg Deal", f"${pipeline_value/total_deals:,.0f}" if total_deals > 0 else "$0")
-    with col5:
-        st.metric("Customers", total_customers)
-    
-    st.markdown("---")
-    
-    # Charts
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Pipeline by Stage")
-        stages = ['prospecting', 'qualification', 'proposal', 'negotiation']
-        stage_values = [
-            sum(d.get('value', 0) for d in deals if d.get('stage') == s)
-            for s in stages
-        ]
-        chart_df = pd.DataFrame({"Stage": [s.title() for s in stages], "Value": stage_values})
-        st.bar_chart(chart_df.set_index("Stage"))
-    
-    with col2:
-        st.subheader("Customer Health")
-        if customers:
-            health_df = pd.DataFrame({"Health Score": [c.get('health_score', 50) for c in customers]})
-            st.bar_chart(health_df)
-    
-    st.markdown("---")
-    
-    #  Insights
-    st.subheader("Insights")
-    
-    if win_rate >= 60 and total_deals > 0:
-        st.success(f"✅ **Excellent Win Rate**: Your {win_rate:.1f}% win rate is above industry average (47%)")
-    elif win_rate < 40 and total_deals > 0:
-        st.warning(f"⚠️ **Win Rate Alert**: Current {win_rate:.1f}% is below target")
-    
-    at_risk = sum(1 for c in customers if c.get('churn_risk') == 'high')
-    if at_risk > 0:
-        st.error(f"🚨 **Churn Alert**: {at_risk} customers at high churn risk")
-    
-    stalled = sum(1 for d in deals if d.get('is_stalled'))
-    if stalled > 0:
-        st.warning(f"⏸️ **Stalled Deals**: {stalled} deals need re-engagement")
 
-    st.markdown("---")
+    # Tabs for different analytics sections
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "💼 Sales", "🎉 Customers", "📧 Email"])
+
+    # ==========================================================================
+    # TAB 1: OVERVIEW
+    # ==========================================================================
+    with tab1:
+        st.subheader("Overview")
+
+        # Key Metrics
+        total_leads = storage.count('contacts')
+        total_deals = storage.count('deals')
+        won_deals = len([d for d in storage.get_all_deals() if d.get('stage') == 'closed_won'])
+        total_customers = storage.count('customers')
+
+        deals = storage.get_all_deals()
+        pipeline_value = sum(d.get('value', 0) for d in deals
+                            if d.get('stage') in ['prospecting', 'qualification', 'proposal', 'negotiation'])
+
+        customers = storage.get_all_customers()
+        total_mrr = sum(c.get('mrr', 0) for c in customers)
+
+        win_rate = (won_deals / total_deals * 100) if total_deals > 0 else 0
+
+        col1, col2, col3, col4, col5 = st.columns(5)
+
+        with col1:
+            st.metric("Win Rate", f"{win_rate:.1f}%")
+        with col2:
+            st.metric("Pipeline", f"${pipeline_value/1000:.0f}K")
+        with col3:
+            st.metric("MRR", f"${total_mrr:,.0f}")
+        with col4:
+            st.metric("Avg Deal", f"${pipeline_value/total_deals:,.0f}" if total_deals > 0 else "$0")
+        with col5:
+            st.metric("Customers", total_customers)
+
+        st.markdown("---")
+
+        # Insights
+        st.subheader("🤖 Insights")
+
+        if win_rate >= 60 and total_deals > 0:
+            st.success(f"✅ **Excellent Win Rate**: Your {win_rate:.1f}% win rate is above industry average (47%)")
+        elif win_rate < 40 and total_deals > 0:
+            st.warning(f"⚠️ **Win Rate Alert**: Current {win_rate:.1f}% is below target")
+
+        at_risk = sum(1 for c in customers if c.get('churn_risk') == 'high')
+        if at_risk > 0:
+            st.error(f"🚨 **Churn Alert**: {at_risk} customers at high churn risk")
+
+        stalled = sum(1 for d in deals if d.get('is_stalled'))
+        if stalled > 0:
+            st.warning(f"⏸️ **Stalled Deals**: {stalled} deals need re-engagement")
+
+    # ==========================================================================
+    # TAB 2: SALES ANALYTICS
+    # ==========================================================================
+    with tab2:
+        st.subheader("Sales Analytics")
+
+        deals = storage.get_all_deals()
+
+        # Pipeline by Stage Chart
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Pipeline by Stage")
+            stages = ['prospecting', 'qualification', 'proposal', 'negotiation']
+            stage_values = [
+                sum(d.get('value', 0) for d in deals if d.get('stage') == s)
+                for s in stages
+            ]
+            chart_df = pd.DataFrame({"Stage": [s.title() for s in stages], "Value": stage_values})
+            st.bar_chart(chart_df.set_index("Stage"))
+
+        with col2:
+            st.subheader("Deals by Stage")
+            stage_counts = {s: len([d for d in deals if d.get('stage') == s]) for s in stages}
+            stage_counts['Closed Won'] = len([d for d in deals if d.get('stage') == 'closed_won'])
+            stage_counts['Closed Lost'] = len([d for d in deals if d.get('stage') == 'closed_lost'])
+            stage_df = pd.DataFrame({"Stage": list(stage_counts.keys()), "Count": list(stage_counts.values())})
+            st.bar_chart(stage_df.set_index("Stage"))
+
+        st.markdown("---")
+
+        # Deal health distribution
+        st.subheader("Deal Health Distribution")
+        health_ranges = [
+            ("Excellent (80-100)", 80, 101),
+            ("Good (60-79)", 60, 80),
+            ("Fair (40-59)", 40, 60),
+            ("Poor (0-39)", 0, 40)
+        ]
+        health_data = []
+        for name, min_score, max_score in health_ranges:
+            count = sum(1 for d in deals if min_score <= d.get('health_score', 0) < max_score)
+            health_data.append({"Health": name, "Deals": count})
+        health_df = pd.DataFrame(health_data)
+        st.bar_chart(health_df.set_index("Health"))
+
+    # ==========================================================================
+    # TAB 3: CUSTOMER ANALYTICS
+    # ==========================================================================
+    with tab3:
+        st.subheader("Customer Analytics")
+
+        customers = storage.get_all_customers()
+
+        if customers:
+            # Metrics
+            col1, col2, col3, col4 = st.columns(4)
+
+            total_mrr = sum(c.get('mrr', 0) for c in customers)
+            avg_health = sum(c.get('health_score', 50) for c in customers) / len(customers)
+            at_risk = sum(1 for c in customers if c.get('churn_risk') == 'high')
+            avg_csat = sum(c.get('csat_score', 0) for c in customers) / len(customers)
+
+            with col1:
+                st.metric("Total MRR", f"${total_mrr:,.0f}")
+            with col2:
+                st.metric("Avg Health", f"{avg_health:.0f}")
+            with col3:
+                st.metric("At Risk", at_risk)
+            with col4:
+                st.metric("Avg CSAT", f"{avg_csat:.1f}")
+
+            st.markdown("---")
+
+            # Health distribution
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.subheader("Health Score Distribution")
+                health_ranges = [
+                    ("Excellent (80-100)", 80, 101),
+                    ("Good (60-79)", 60, 80),
+                    ("Warning (40-59)", 40, 60),
+                    ("At Risk (0-39)", 0, 40)
+                ]
+                health_data = []
+                for name, min_score, max_score in health_ranges:
+                    count = sum(1 for c in customers if min_score <= c.get('health_score', 0) < max_score)
+                    health_data.append({"Health": name, "Customers": count})
+                health_df = pd.DataFrame(health_data)
+                st.bar_chart(health_df.set_index("Health"))
+
+            with col2:
+                st.subheader("Churn Risk Distribution")
+                churn_data = {}
+                for risk in ['low', 'medium', 'high']:
+                    churn_data[risk.title()] = len([c for c in customers if c.get('churn_risk') == risk])
+                churn_df = pd.DataFrame({"Risk Level": list(churn_data.keys()), "Customers": list(churn_data.values())})
+                st.bar_chart(churn_df.set_index("Risk Level"))
+
+    # ==========================================================================
+    # TAB 4: EMAIL ANALYTICS
+    # ==========================================================================
+    with tab4:
+        st.subheader("📧 Email Analytics")
+
+        all_emails = storage.get_all_emails(limit=500)
+        
+        if all_emails:
+            # Metrics
+            c1, c2, c3, c4, c5 = st.columns(5)
+            
+            total = len(all_emails)
+            inbound = len([e for e in all_emails if e.get('direction') == 'inbound'])
+            outbound = len([e for e in all_emails if e.get('direction') == 'outbound'])
+            responded = len([e for e in all_emails if e.get('response_sent')])
+            high_priority = len([e for e in all_emails if e.get('priority') == 'high'])
+            
+            response_rate = (responded / inbound * 100) if inbound > 0 else 0
+            
+            with c1:
+                st.metric("Total Emails", total)
+            with c2:
+                st.metric("Inbound", inbound)
+            with c3:
+                st.metric("Outbound", outbound)
+            with c4:
+                st.metric("Response Rate", f"{response_rate:.1f}%")
+            with c5:
+                st.metric("High Priority", high_priority)
+            
+            st.markdown("---")
+            
+            # Charts
+            c1, c2 = st.columns(2)
+            
+            with c1:
+                st.subheader("Emails by Category")
+                categories = ['inquiry', 'support', 'sales', 'partnership', 'general']
+                cat_data = {cat: len([e for e in all_emails if e.get('category') == cat]) for cat in categories}
+                cat_df = pd.DataFrame({"Category": list(cat_data.keys()), "Count": list(cat_data.values())})
+                st.bar_chart(cat_df.set_index("Category"))
+            
+            with c2:
+                st.subheader("Emails by Sentiment")
+                sentiments = ['positive', 'neutral', 'negative']
+                sent_data = {s: len([e for e in all_emails if e.get('sentiment') == s]) for s in sentiments}
+                sent_df = pd.DataFrame({"Sentiment": list(sent_data.keys()), "Count": list(sent_data.values())})
+                st.bar_chart(sent_df.set_index("Sentiment"))
+            
+            st.markdown("---")
+            
+            # Priority breakdown
+            st.subheader("Priority Distribution")
+            c1, c2, c3 = st.columns(3)
+            
+            with c1:
+                high_count = len([e for e in all_emails if e.get('priority') == 'high'])
+                st.metric("🔴 High", high_count)
+            with c2:
+                med_count = len([e for e in all_emails if e.get('priority') == 'medium'])
+                st.metric("🟡 Medium", med_count)
+            with c3:
+                low_count = len([e for e in all_emails if e.get('priority') == 'low'])
+                st.metric("🟢 Low", low_count)
+            
+            st.markdown("---")
+            
+            # Recent activity table
+            st.subheader("Recent Email Activity")
+            recent = sorted(all_emails, key=lambda x: x.get('created_at', ''), reverse=True)[:10]
+            df_data = []
+            for e in recent:
+                df_data.append({
+                    "Date": e.get('created_at', '')[:10],
+                    "Direction": "📥" if e.get('direction') == 'inbound' else "📤",
+                    "Subject": e.get('subject', 'No Subject')[:40],
+                    "From": e.get('from_email', ''),
+                    "Priority": e.get('priority', 'medium'),
+                    "Responded": "✅" if e.get('response_sent') else "❌"
+                })
+            st.dataframe(pd.DataFrame(df_data), use_container_width=True, hide_index=True)
+        else:
+            st.info("📭 No emails found.")
 
    
 
