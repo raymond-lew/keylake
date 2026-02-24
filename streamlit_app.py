@@ -11,7 +11,7 @@ from database.connection import storage
 # ============================================================================
 
 st.set_page_config(
-    page_title="Keylake",
+    page_title=" Keylake",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -136,21 +136,6 @@ with st.sidebar:
         ],
         label_visibility="collapsed"
     )
-    
-    st.markdown("---")
-    st.markdown("### Agent Status")
-    
-    agents = {
-        "Lead Qualification": "🟢 Active",
-        "Email Intelligence": "🟢 Active",
-        "Sales Pipeline": "🟢 Active",
-        "Customer Success": "🟢 Active",
-        "Meeting Scheduler": "🟢 Active",
-        "Analytics": "🟢 Active"
-    }
-    
-    for agent, status in agents.items():
-        st.caption(f"{agent}: {status}")
     
     st.markdown("---")
     stats = storage.get_stats()
@@ -714,138 +699,481 @@ def show_customers():
 # ============================================================================
 
 def show_emails():
-    """Display emails management with full CRUD"""
-    st.title("📧 Emails")
-    
-    tab1, tab2 = st.tabs(["Inbox", "➕ Add Email"])
-    
+    """Display emails management with full CRUD - Smart CRM Inbox"""
+    st.title("📧 Email Inbox")
+
+    # Initialize session state for email selection and assignment
+    if 'selected_email_id' not in st.session_state:
+        st.session_state.selected_email_id = None
+    if 'email_assignees' not in st.session_state:
+        st.session_state.email_assignees = ["Me", "John (Sales)", "Sarah (Support)", "Mike (Success)"]
+    if 'email_templates' not in st.session_state:
+        st.session_state.email_templates = [
+            {"name": "Follow Up", "subject": "Following up on our conversation", "body": "Hi {{first_name}},\n\nI hope this email finds you well. I wanted to follow up on our recent conversation regarding {{company_name}}.\n\nWould you be available for a quick call this week?\n\nBest regards,\n{{sender_name}}"},
+            {"name": "Demo Request", "subject": "Demo Request - {{company_name}}", "body": "Hi {{first_name}},\n\nThank you for your interest in our product! I'd love to show you how our solution can help {{company_name}}.\n\nHere are some available time slots for a demo:\n- [Date/Time 1]\n- [Date/Time 2]\n- [Date/Time 3]\n\nLooking forward to connecting!\n\nBest regards,\n{{sender_name}}"},
+            {"name": "Proposal Sent", "subject": "Proposal for {{company_name}}", "body": "Hi {{first_name}},\n\nAs discussed, please find attached our proposal for {{company_name}}.\n\nKey highlights:\n- [Benefit 1]\n- [Benefit 2]\n- [Benefit 3]\n\nLet me know if you have any questions!\n\nBest regards,\n{{sender_name}}"},
+            {"name": "Support Response", "subject": "Re: {{subject}}", "body": "Hi {{first_name}},\n\nThank you for reaching out. I understand your concern regarding this issue.\n\nI've looked into this and here's what I found:\n\n[Solution details]\n\nPlease let me know if this resolves your issue or if you need further assistance.\n\nBest regards,\n{{sender_name}}"},
+            {"name": "Check-in", "subject": "Checking in - {{company_name}}", "body": "Hi {{first_name}},\n\nI wanted to check in and see how things are going with {{company_name}}.\n\nIs there anything I can help you with or any questions you might have?\n\nBest regards,\n{{sender_name}}"},
+        ]
+
+    # Sidebar filters
+    with st.sidebar:
+        st.subheader("📧 Inbox Filters")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            direction_filter = st.selectbox("Direction", ["All", "inbound", "outbound"])
+        with col2:
+            priority_filter = st.selectbox("Priority", ["All", "high", "medium", "low"])
+        
+        category_filter = st.selectbox("Category", ["All", "inquiry", "support", "sales", "partnership", "general"])
+        sentiment_filter = st.selectbox("Sentiment", ["All", "positive", "neutral", "negative"])
+        
+        st.divider()
+        
+        # Quick stats
+        all_emails = storage.get_all_emails(limit=500)
+        inbound_count = len([e for e in all_emails if e.get('direction') == 'inbound'])
+        outbound_count = len([e for e in all_emails if e.get('direction') == 'outbound'])
+        unread_count = len([e for e in all_emails if e.get('direction') == 'inbound' and not e.get('response_sent')])
+        high_priority = len([e for e in all_emails if e.get('priority') == 'high' and not e.get('response_sent')])
+        
+        st.metric("Total Emails", len(all_emails))
+        st.metric("Inbound", inbound_count)
+        st.metric("Outbound", outbound_count)
+        st.metric("🔴 Unread", unread_count)
+        st.metric("⚠️ High Priority", high_priority)
+
+    # Main tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["📥 Inbox", "✉️ Compose", "📋 Templates", "📊 Analytics"])
+
+    # ==========================================================================
+    # TAB 1: INBOX VIEW
+    # ==========================================================================
     with tab1:
         st.subheader("Email Inbox")
+
+        # Get and filter emails
+        emails = storage.get_all_emails(limit=200)
         
-        # Filter
-        priority_filter = st.selectbox(
-            "Priority",
-            ["All", "high", "medium", "low"]
-        )
-        
-        emails = storage.get_all_emails(limit=100)
-        
+        # Apply filters
+        if direction_filter != "All":
+            emails = [e for e in emails if e.get('direction') == direction_filter]
         if priority_filter != "All":
             emails = [e for e in emails if e.get('priority') == priority_filter]
-        
+        if category_filter != "All":
+            emails = [e for e in emails if e.get('category') == category_filter]
+        if sentiment_filter != "All":
+            emails = [e for e in emails if e.get('sentiment') == sentiment_filter]
+
+        # Sort by date (newest first)
         emails = sorted(emails, key=lambda x: x.get('created_at', ''), reverse=True)
-        
+
+        # Search
+        search = st.text_input("🔍 Search emails", placeholder="Search by subject, sender, or content...")
+        if search:
+            search_lower = search.lower()
+            emails = [e for e in emails 
+                     if search_lower in (e.get('subject') or '').lower()
+                     or search_lower in (e.get('from_email') or '').lower()
+                     or search_lower in (e.get('to_email') or '').lower()
+                     or search_lower in (e.get('body') or '').lower()]
+
         if emails:
-            for email in emails:
-                sentiment_icon = {"positive": "😊", "neutral": "😐", "negative": "😞"}.get(email.get('sentiment'), "")
-                priority_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(email.get('priority'), "")
+            # Display as two-column layout: email list + context panel
+            list_col, context_col = st.columns([2, 1])
+            
+            with list_col:
+                st.markdown("### Email List")
                 
-                with st.expander(f"{priority_icon} {email.get('subject') or 'No Subject'} {sentiment_icon}"):
-                    col1, col2 = st.columns(2)
+                for email in emails:
+                    sentiment_icon = {"positive": "😊", "neutral": "😐", "negative": "😞"}.get(email.get('sentiment'), "⚪")
+                    priority_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(email.get('priority'), "⚪")
+                    direction_icon = "📥" if email.get('direction') == 'inbound' else "📤"
+                    read_status = "" if email.get('response_sent') or email.get('direction') == 'outbound' else "🔵"
                     
-                    with col1:
-                        st.write(f"**From:** {email.get('from_email')}")
-                        st.write(f"**To:** {email.get('to_email')}")
-                        st.write(f"**Direction:** {email.get('direction', 'inbound')}")
+                    # Create a unique key for the expander
+                    email_id = email.get('id', '')
                     
-                    with col2:
-                        st.write(f"**Sentiment:** {email.get('sentiment', 'Unknown')}")
-                        st.write(f"**Category:** {email.get('category', 'Uncategorized')}")
-                        st.write(f"**Response Sent:** {'✅' if email.get('response_sent') else '❌'}")
-                    
-                    st.markdown("---")
-                    st.write(email.get('body', 'No content'))
-                    
-                    if email.get('draft_response'):
-                        st.info("🤖 **AI Draft Response:**")
-                        st.write(email.get('draft_response'))
-                    
-                    # Actions
-                    col1, col2, col3 = st.columns(3)
-
-                    with col1:
-                        if st.button("✏️ Edit", key=f"edit_email_{email.get('id')}"):
-                            st.session_state.editing_email = email.get('id')
-                            st.rerun()
-
-                    with col2:
-                        if st.button("🗑️ Delete", key=f"delete_email_{email.get('id')}"):
-                            storage.delete_email(email.get('id'))
-                            st.success("Email deleted!")
-                            st.rerun()
-
-                    with col3:
-                        if st.button("📤 Mark Sent", key=f"sent_email_{email.get('id')}", disabled=email.get('response_sent')):
-                            storage.mark_email_sent(email.get('id'))
-                            st.success("Marked as sent!")
-                            st.rerun()
-
-                    # Edit form
-                    if st.session_state.editing_email == email.get('id'):
-                        st.markdown("---")
-                        with st.form(f"edit_email_form_{email.get('id')}"):
-                            subject = st.text_input("Subject", email.get('subject', ''))
-                            body = st.text_area("Body", email.get('body', ''))
-                            c1, c2 = st.columns(2)
-                            with c1:
-                                sentiment = st.selectbox("Sentiment", ["positive", "neutral", "negative"],
-                                                       index=["positive", "neutral", "negative"].index(email.get('sentiment', 'neutral')))
-                                priority = st.selectbox("Priority", ["high", "medium", "low"],
-                                                      index=["high", "medium", "low"].index(email.get('priority', 'medium')))
-                            with c2:
-                                category = st.text_input("Category", email.get('category', ''))
-                                draft = st.text_area("Draft Response", email.get('draft_response', ''))
-
-                            if st.form_submit_button("💾 Save Changes"):
-                                storage.update_email(email.get('id'),
-                                    subject=subject,
-                                    body=body,
-                                    sentiment=sentiment,
-                                    priority=priority,
-                                    category=category,
-                                    draft_response=draft
-                                )
-                                st.success("Email updated!")
-                                st.session_state.editing_email = None
+                    with st.expander(f"{read_status}{priority_icon} {direction_icon} **{email.get('subject') or 'No Subject'}** {sentiment_icon}", 
+                                   expanded=(st.session_state.selected_email_id == email_id)):
+                        
+                        # Email header
+                        c1, c2, c3 = st.columns([3, 2, 1])
+                        with c1:
+                            st.write(f"**From:** {email.get('from_email', 'Unknown')}")
+                            st.write(f"**To:** {email.get('to_email', 'Unknown')}")
+                        with c2:
+                            created = email.get('created_at', '')[:16].replace('T', ' ') if email.get('created_at') else 'N/A'
+                            st.write(f"**Date:** {created}")
+                            st.write(f"**Category:** {email.get('category', 'general')}")
+                        with c3:
+                            st.write(f"**Priority:** {priority_icon}")
+                            responded = "✅" if email.get('response_sent') else "❌"
+                            st.write(f"**Responded:** {responded}")
+                        
+                        st.divider()
+                        
+                        # Email body
+                        st.markdown(email.get('body', 'No content'))
+                        
+                        # AI Draft Response
+                        if email.get('draft_response'):
+                            with st.expander("🤖 AI Draft Response", expanded=False):
+                                st.markdown(email.get('draft_response'))
+                        
+                        # Quick Actions
+                        st.divider()
+                        c1, c2, c3, c4 = st.columns(4)
+                        
+                        with c1:
+                            if st.button("✏️ Edit", key=f"edit_email_{email_id}", use_container_width=True):
+                                st.session_state.editing_email = email_id
+                                st.session_state.selected_email_id = email_id
                                 st.rerun()
+                        
+                        with c2:
+                            if st.button("📤 Mark Sent", key=f"sent_{email_id}", 
+                                       disabled=email.get('response_sent'), use_container_width=True):
+                                storage.mark_email_sent(email_id)
+                                st.success("Marked as sent!")
+                                st.rerun()
+                        
+                        with c3:
+                            if st.button("🔖 Add Reminder", key=f"reminder_{email_id}", use_container_width=True):
+                                st.session_state.selected_email_id = email_id
+                                st.rerun()
+                        
+                        with c4:
+                            if st.button("🗑️ Delete", key=f"delete_email_{email_id}", use_container_width=True):
+                                storage.delete_email(email_id)
+                                st.success("Email deleted!")
+                                st.rerun()
+                        
+                        # Edit form (inline)
+                        if st.session_state.editing_email == email_id:
+                            st.divider()
+                            with st.form(f"edit_email_form_{email_id}"):
+                                c1, c2 = st.columns(2)
+                                with c1:
+                                    subject = st.text_input("Subject", email.get('subject', ''))
+                                    priority = st.selectbox("Priority", ["high", "medium", "low"],
+                                                          index=["high", "medium", "low"].index(email.get('priority', 'medium')))
+                                with c2:
+                                    category = st.text_input("Category", email.get('category', ''))
+                                    sentiment = st.selectbox("Sentiment", ["positive", "neutral", "negative"],
+                                                           index=["positive", "neutral", "negative"].index(email.get('sentiment', 'neutral')))
+                                
+                                body = st.text_area("Body", email.get('body', ''), height=150)
+                                draft = st.text_area("AI Draft Response", email.get('draft_response', ''), height=100)
+                                
+                                if st.form_submit_button("💾 Save Changes"):
+                                    storage.update_email(email_id,
+                                        subject=subject,
+                                        body=body,
+                                        priority=priority,
+                                        category=category,
+                                        sentiment=sentiment,
+                                        draft_response=draft
+                                    )
+                                    st.success("Email updated!")
+                                    st.session_state.editing_email = None
+                                    st.rerun()
+            
+            with context_col:
+                st.markdown("### 📋 Context Panel")
+                
+                # Get related contact info
+                contact_id = emails[0].get('contact_id') if emails else None
+                if contact_id:
+                    contact = storage.get_contact(contact_id)
+                    if contact:
+                        st.markdown(f"**👤 Contact**")
+                        st.info(f"{contact.get('first_name', '')} {contact.get('last_name', '')}\n\n{contact.get('job_title', 'N/A')}")
+                        st.write(f"📧 {contact.get('email', 'N/A')}")
+                        st.write(f"📱 {contact.get('phone', 'N/A')}")
+                        st.write(f"🏢 {get_company_name(contact.get('company_id'))}")
+                        st.write(f"📊 Lead Score: {contact.get('lead_score', 0)}")
+                        st.write(f"📈 Status: {contact.get('lead_status', 'N/A')}")
+                        
+                        # Find related deals
+                        deals = storage.get_all_deals()
+                        related_deals = [d for d in deals if d.get('contact_id') == contact_id]
+                        if related_deals:
+                            st.divider()
+                            st.markdown("**💼 Related Deals**")
+                            for deal in related_deals:
+                                stage_color = get_deal_stage_color(deal.get('stage', ''))
+                                st.write(f"{stage_color} {deal.get('name', 'Unknown')} - ${deal.get('value', 0):,}")
+                                st.write(f"   Stage: {deal.get('stage', 'N/A')} | Probability: {deal.get('probability', 0)}%")
+                
+                # Email history with this contact
+                if contact_id:
+                    st.divider()
+                    st.markdown("**📜 Email History**")
+                    contact_emails = [e for e in emails if e.get('contact_id') == contact_id][:5]
+                    for ce in contact_emails:
+                        icon = "📥" if ce.get('direction') == 'inbound' else "📤"
+                        st.write(f"{icon} {ce.get('subject', 'No Subject')[:40]}...")
+                
+                # Assignment section (Shared Inbox)
+                st.divider()
+                st.markdown("**👥 Assign To**")
+                assignee = st.selectbox("Assign email to", st.session_state.email_assignees, 
+                                       key=f"assign_{contact_id or 'general'}")
+                if st.button("📋 Assign", key=f"assign_btn_{contact_id or 'general'}", use_container_width=True):
+                    st.success(f"Assigned to: {assignee}")
+                
+                # Quick reply with template
+                st.divider()
+                st.markdown("**⚡ Quick Reply**")
+                selected_template = st.selectbox("Use template", [""] + [t["name"] for t in st.session_state.email_templates])
+                if selected_template:
+                    template = next((t for t in st.session_state.email_templates if t["name"] == selected_template), None)
+                    if template:
+                        st.session_state.quick_reply_subject = template["subject"]
+                        st.session_state.quick_reply_body = template["body"]
+                
+                if st.button("📝 Use Template for Reply", key="use_template_reply"):
+                    if hasattr(st.session_state, 'quick_reply_subject'):
+                        st.session_state.compose_subject = st.session_state.quick_reply_subject
+                        st.session_state.compose_body = st.session_state.quick_reply_body
+                        st.rerun()
         else:
-            st.info("No emails found.")
-    
+            st.info("📭 No emails found matching your filters.")
+
+    # ==========================================================================
+    # TAB 2: COMPOSE EMAIL
+    # ==========================================================================
     with tab2:
-        st.subheader("Create New Email")
-        
-        with st.form("create_email_form"):
+        st.subheader("✉️ Compose New Email")
+
+        with st.form("compose_email_form"):
             c1, c2 = st.columns(2)
 
             with c1:
-                from_email = st.text_input("From Email *")
-                to_email = st.text_input("To Email *")
-                subject = st.text_input("Subject")
+                # Get contacts for selection
+                contacts = storage.get_all_contacts()
+                contact_options = {f"{c.get('first_name')} {c.get('last_name')} ({c.get('email')})": c for c in contacts}
+                selected_contact_str = st.selectbox("To Contact", [""] + list(contact_options.keys()))
+                
+                from_email = st.text_input("From Email", "sales@ourcrm.com")
+                subject = st.text_input("Subject *")
 
             with c2:
-                direction = st.selectbox("Direction", ["inbound", "outbound"])
+                direction = st.selectbox("Direction", ["outbound", "inbound"])
                 priority = st.selectbox("Priority", ["high", "medium", "low"])
-                category = st.text_input("Category", "general")
+                category = st.selectbox("Category", ["sales", "inquiry", "support", "partnership", "general"])
 
-            body = st.text_area("Body", height=150)
+            # Template selector
+            template_name = st.selectbox("📋 Use Template (Optional)", [""] + [t["name"] for t in st.session_state.email_templates])
+            
+            body = st.text_area("Body *", height=200, 
+                              value=st.session_state.get('compose_body', ''))
+            
+            # Merge fields info
+            with st.expander("🔖 Available Merge Fields"):
+                st.markdown("""
+                - `{{first_name}}` - Contact's first name
+                - `{{last_name}}` - Contact's last name  
+                - `{{company_name}}` - Company name
+                - `{{job_title}}` - Contact's job title
+                - `{{sender_name}}` - Your name
+                - `{{subject}}` - Email subject
+                """)
 
-            submitted = st.form_submit_button("➕ Create Email", type="primary")
+            submitted = st.form_submit_button("📤 Send Email", type="primary")
 
             if submitted:
-                if not from_email or not to_email:
-                    st.error("Please fill in required fields (From Email, To Email)")
+                if not from_email or not subject or not body:
+                    st.error("Please fill in required fields (From Email, Subject, Body)")
                 else:
+                    # Get contact details
+                    contact = contact_options.get(selected_contact_str) if selected_contact_str else None
+                    contact_id = contact.get('id') if contact else None
+                    to_email = contact.get('email') if contact else st.text_input("Enter recipient email")
+                    
+                    # Simple merge field replacement
+                    merged_body = body
+                    merged_subject = subject
+                    if contact:
+                        merged_body = merged_body.replace("{{first_name}}", contact.get('first_name', ''))
+                        merged_body = merged_body.replace("{{last_name}}", contact.get('last_name', ''))
+                        company = get_company_name(contact.get('company_id'))
+                        merged_body = merged_body.replace("{{company_name}}", company)
+                        merged_body = merged_body.replace("{{job_title}}", contact.get('job_title', ''))
+                        merged_subject = merged_subject.replace("{{first_name}}", contact.get('first_name', ''))
+                        merged_subject = merged_subject.replace("{{company_name}}", company)
+                    
+                    merged_body = merged_body.replace("{{sender_name}}", "Sales Team")
+                    merged_subject = merged_subject.replace("{{subject}}", subject)
+                    
                     storage.create_email(
                         from_email=from_email,
-                        to_email=to_email,
-                        subject=subject,
-                        body=body,
+                        to_email=to_email if to_email else "",
+                        subject=merged_subject,
+                        body=merged_body,
                         direction=direction,
                         priority=priority,
-                        category=category
+                        category=category,
+                        contact_id=contact_id,
+                        response_sent=(direction == "outbound")
                     )
-                    st.success("✅ Email created!")
+                    st.success("✅ Email sent successfully!")
+                    st.session_state.compose_body = ''
                     st.rerun()
+
+    # ==========================================================================
+    # TAB 3: EMAIL TEMPLATES
+    # ==========================================================================
+    with tab3:
+        st.subheader("📋 Email Templates")
+
+        templates_tab, create_tab = st.tabs(["View Templates", "➕ Create Template"])
+
+        with templates_tab:
+            if st.session_state.email_templates:
+                for i, template in enumerate(st.session_state.email_templates):
+                    with st.expander(f"📄 {template['name']}"):
+                        st.write(f"**Subject:** {template['subject']}")
+                        st.write("**Body:**")
+                        st.text_area("Template Body", template['body'], height=150, key=f"tpl_{i}")
+                        
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            if st.button("✏️ Edit", key=f"edit_tpl_{i}"):
+                                st.session_state.editing_template = i
+                        with c2:
+                            if st.button("🗑️ Delete", key=f"delete_tpl_{i}"):
+                                st.session_state.email_templates.pop(i)
+                                st.success("Template deleted!")
+                                st.rerun()
+                        
+                        # Edit form
+                        if st.session_state.get('editing_template') == i:
+                            with st.form(f"edit_template_form_{i}"):
+                                name = st.text_input("Template Name", template['name'])
+                                subject = st.text_input("Subject", template['subject'])
+                                body = st.text_area("Body", template['body'], height=150)
+                                
+                                if st.form_submit_button("💾 Save"):
+                                    st.session_state.email_templates[i] = {
+                                        "name": name,
+                                        "subject": subject,
+                                        "body": body
+                                    }
+                                    st.success("Template updated!")
+                                    st.session_state.editing_template = None
+                                    st.rerun()
+            else:
+                st.info("No templates created yet.")
+
+        with create_tab:
+            st.markdown("### Create New Template")
+            
+            with st.form("create_template_form"):
+                name = st.text_input("Template Name *")
+                subject = st.text_input("Subject *")
+                body = st.text_area("Body *", height=200)
+                
+                st.info("💡 Tip: Use merge fields like {{first_name}}, {{company_name}}, {{sender_name}} to personalize emails")
+                
+                submitted = st.form_submit_button("➕ Create Template", type="primary")
+                
+                if submitted:
+                    if not name or not subject or not body:
+                        st.error("Please fill in all required fields")
+                    else:
+                        st.session_state.email_templates.append({
+                            "name": name,
+                            "subject": subject,
+                            "body": body
+                        })
+                        st.success(f"✅ Template '{name}' created!")
+                        st.rerun()
+
+    # ==========================================================================
+    # TAB 4: EMAIL ANALYTICS
+    # ==========================================================================
+    with tab4:
+        st.subheader("📊 Email Analytics")
+
+        all_emails = storage.get_all_emails(limit=500)
+        
+        # Metrics
+        c1, c2, c3, c4, c5 = st.columns(5)
+        
+        total = len(all_emails)
+        inbound = len([e for e in all_emails if e.get('direction') == 'inbound'])
+        outbound = len([e for e in all_emails if e.get('direction') == 'outbound'])
+        responded = len([e for e in all_emails if e.get('response_sent')])
+        high_priority = len([e for e in all_emails if e.get('priority') == 'high'])
+        
+        response_rate = (responded / inbound * 100) if inbound > 0 else 0
+        
+        with c1:
+            st.metric("Total Emails", total)
+        with c2:
+            st.metric("Inbound", inbound)
+        with c3:
+            st.metric("Outbound", outbound)
+        with c4:
+            st.metric("Response Rate", f"{response_rate:.1f}%")
+        with c5:
+            st.metric("High Priority", high_priority)
+        
+        st.divider()
+        
+        # Charts
+        c1, c2 = st.columns(2)
+        
+        with c1:
+            st.subheader("Emails by Category")
+            categories = ['inquiry', 'support', 'sales', 'partnership', 'general']
+            cat_data = {cat: len([e for e in all_emails if e.get('category') == cat]) for cat in categories}
+            cat_df = pd.DataFrame({"Category": list(cat_data.keys()), "Count": list(cat_data.values())})
+            st.bar_chart(cat_df.set_index("Category"))
+        
+        with c2:
+            st.subheader("Emails by Sentiment")
+            sentiments = ['positive', 'neutral', 'negative']
+            sent_data = {s: len([e for e in all_emails if e.get('sentiment') == s]) for s in sentiments}
+            sent_df = pd.DataFrame({"Sentiment": list(sent_data.keys()), "Count": list(sent_data.values())})
+            st.bar_chart(sent_df.set_index("Sentiment"))
+        
+        st.divider()
+        
+        # Priority breakdown
+        st.subheader("Priority Distribution")
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
+            high_count = len([e for e in all_emails if e.get('priority') == 'high'])
+            st.metric("🔴 High", high_count)
+        with c2:
+            med_count = len([e for e in all_emails if e.get('priority') == 'medium'])
+            st.metric("🟡 Medium", med_count)
+        with c3:
+            low_count = len([e for e in all_emails if e.get('priority') == 'low'])
+            st.metric("🟢 Low", low_count)
+        
+        st.divider()
+        
+        # Recent activity table
+        st.subheader("Recent Email Activity")
+        if all_emails:
+            recent = sorted(all_emails, key=lambda x: x.get('created_at', ''), reverse=True)[:10]
+            df_data = []
+            for e in recent:
+                df_data.append({
+                    "Date": e.get('created_at', '')[:10],
+                    "Direction": "📥" if e.get('direction') == 'inbound' else "📤",
+                    "Subject": e.get('subject', 'No Subject')[:40],
+                    "From": e.get('from_email', ''),
+                    "Priority": e.get('priority', 'medium'),
+                    "Responded": "✅" if e.get('response_sent') else "❌"
+                })
+            st.dataframe(pd.DataFrame(df_data), use_container_width=True, hide_index=True)
 
 # ============================================================================
 # MEETINGS PAGE - FULL CRUD
@@ -1343,8 +1671,8 @@ def show_analytics():
     
     st.markdown("---")
     
-    # AI Insights
-    st.subheader("🤖 AI Insights")
+    #  Insights
+    st.subheader("Insights")
     
     if win_rate >= 60 and total_deals > 0:
         st.success(f"✅ **Excellent Win Rate**: Your {win_rate:.1f}% win rate is above industry average (47%)")
@@ -1358,22 +1686,10 @@ def show_analytics():
     stalled = sum(1 for d in deals if d.get('is_stalled'))
     if stalled > 0:
         st.warning(f"⏸️ **Stalled Deals**: {stalled} deals need re-engagement")
-    
+
     st.markdown("---")
-    
-    # Agent Performance
-    st.subheader("⚙️ AI Agent Performance")
-    
-    agent_data = [
-        {"Agent": "Lead Qualification", "Tasks": 1247, "Accuracy": 94, "Time Saved": 52},
-        {"Agent": "Email Intelligence", "Tasks": 3421, "Accuracy": 91, "Time Saved": 128},
-        {"Agent": "Sales Pipeline", "Tasks": 892, "Accuracy": 96, "Time Saved": 38},
-        {"Agent": "Customer Success", "Tasks": 567, "Accuracy": 93, "Time Saved": 45},
-        {"Agent": "Meeting Scheduler", "Tasks": 423, "Accuracy": 98, "Time Saved": 67},
-        {"Agent": "Analytics", "Tasks": 156, "Accuracy": 99, "Time Saved": 24},
-    ]
-    
-    st.dataframe(pd.DataFrame(agent_data), use_container_width=True, hide_index=True)
+
+   
 
 # ============================================================================
 # SETTINGS PAGE
@@ -1383,7 +1699,7 @@ def show_settings():
     """Display settings and configuration"""
     st.title("⚙️ Settings")
     
-    tab1, tab2, tab3 = st.tabs(["General", "AI Agents", "Data"])
+    tab1, tab2 = st.tabs(["General", "Data"])
     
     with tab1:
         st.subheader("General Settings")
@@ -1396,22 +1712,9 @@ def show_settings():
             st.text_input("Timezone", "UTC")
             st.selectbox("Currency", ["USD", "EUR", "GBP", "JPY"])
     
-    with tab2:
-        st.subheader("AI Agent Configuration")
-        
-        agents = {
-            "Lead Qualification": True,
-            "Email Intelligence": True,
-            "Sales Pipeline": True,
-            "Customer Success": True,
-            "Meeting Scheduler": True,
-            "Analytics": True
-        }
-        
-        for agent, enabled in agents.items():
-            st.toggle(f"🤖 {agent}", value=enabled)
     
-    with tab3:
+    
+    with tab2:
         st.subheader("Data Management")
         
         stats = storage.get_stats()
