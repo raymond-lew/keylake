@@ -3,14 +3,8 @@
 import streamlit as st
 from datetime import datetime, timedelta, date
 import pandas as pd
-import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 from database.connection import storage
-from services.email_service import get_email_service, send_test_email
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -954,15 +948,6 @@ def show_emails():
     with tab2:
         st.subheader("✉️ Compose New Email")
 
-        # Email service status
-        email_service = get_email_service()
-        service_configured = email_service.is_configured()
-        
-        if not service_configured:
-            st.warning("⚠️ Mailtrap is not configured. Emails will be saved locally only. Set MAILTRAP_USERNAME and MAILTRAP_PASSWORD environment variables to enable sending.")
-        else:
-            st.success("✅ Mailtrap configured and ready to send emails!")
-
         with st.form("compose_email_form"):
             c1, c2 = st.columns(2)
 
@@ -985,9 +970,6 @@ def show_emails():
             # Template selector
             template_name = st.selectbox("📋 Use Template (Optional)", [""] + [t["name"] for t in st.session_state.email_templates],
                                         key="compose_template_selector")
-            
-            # Send via Mailtrap option
-            send_via_mailtrap = st.checkbox("📤 Send via Mailtrap SMTP", value=service_configured, disabled=not service_configured)
 
             body = st.text_area("Body *", height=200,
                               value=st.session_state.get('compose_body', ''))
@@ -1040,36 +1022,19 @@ def show_emails():
                         merged_body = merged_body.replace("{{sender_name}}", "Sales Team")
                         merged_subject = merged_subject.replace("{{subject}}", subject)
 
-                        # Send via Mailtrap if enabled
-                        if send_via_mailtrap and service_configured:
-                            with st.spinner("📤 Sending email via Mailtrap..."):
-                                result = email_service.send_email(
-                                    to_email=to_email,
-                                    subject=merged_subject,
-                                    body=merged_body,
-                                    from_email=from_email,
-                                    html=False
-                                )
-                                
-                                if result.get("success"):
-                                    st.success(f"✅ Email sent via Mailtrap! {result.get('message')}")
-                                else:
-                                    st.error(f"❌ Failed to send: {result.get('message')}")
-                                    st.stop()
-
                         # Save to local storage
                         storage.create_email(
                             from_email=from_email,
                             to_email=to_email,
                             subject=merged_subject,
                             body=merged_body,
-                            direction="outbound" if send_via_mailtrap else direction,
+                            direction="outbound",
                             priority=priority,
                             category=category,
                             contact_id=contact_id,
                             response_sent=True
                         )
-                        st.success("✅ Email saved successfully!" + (" Sent via Mailtrap!" if send_via_mailtrap else ""))
+                        st.success("✅ Email saved successfully!")
                         st.session_state.compose_body = ''
                         st.rerun()
 
@@ -1837,7 +1802,7 @@ def show_settings():
     """Display settings and configuration"""
     st.title("⚙️ Settings")
 
-    tab1, tab2, tab3 = st.tabs(["General", "📧 Mailtrap", "💾 Data"])
+    tab1, tab2 = st.tabs(["General", "💾 Data"])
 
     with tab1:
         st.subheader("General Settings")
@@ -1851,116 +1816,9 @@ def show_settings():
             st.selectbox("Currency", ["USD", "EUR", "GBP", "JPY"])
 
     # ==========================================================================
-    # TAB 2: MAILTRAP CONFIGURATION
+    # TAB 2: DATA MANAGEMENT
     # ==========================================================================
     with tab2:
-        st.subheader("📧 Mailtrap Email Configuration")
-
-        st.markdown("""
-        Configure Mailtrap to send emails directly from the CRM.
-        
-        **Two options available:**
-        
-        1. **Email Sending (API)** - Recommended for production
-           - Go to [Mailtrap.io](https://mailtrap.io) → Email Sending
-           - Create a sending domain and get your API key
-        
-        2. **Email Testing (SMTP)** - For testing/development
-           - Go to [Mailtrap.io](https://mailtrap.io) → Email Testing
-           - Create an inbox and get SMTP credentials
-        """)
-
-        # Check current configuration
-        email_service = get_email_service()
-        is_configured = email_service.is_configured()
-        mode = email_service.get_mode()
-
-        if is_configured:
-            st.success(f"✅ Mailtrap is configured! Mode: **{mode}**")
-        else:
-            st.warning("⚠️ Mailtrap is not configured. Emails will only be saved locally.")
-
-        st.divider()
-
-        # Environment variable configuration
-        st.markdown("### Option 1: API Configuration (Recommended)")
-
-        st.code("""
-# Add these to your .env file
-MAILTRAP_API_KEY=your_api_key_here
-MAILTRAP_API_HOST=send.api.mailtrap.io
-MAILTRAP_FROM_EMAIL=noreply@yourdomain.com
-        """, language="bash")
-
-        st.markdown("### Option 2: SMTP Configuration (Testing)")
-
-        st.code("""
-# Add these to your .env file
-MAILTRAP_SMTP_HOST=smtp.mailtrap.io
-MAILTRAP_SMTP_PORT=587
-MAILTRAP_USERNAME=your_smtp_username
-MAILTRAP_PASSWORD=your_smtp_password
-MAILTRAP_FROM_EMAIL=noreply@yourdomain.com
-        """, language="bash")
-
-        st.divider()
-
-        # Test connection section
-        st.markdown("### Test Email Configuration")
-
-        test_email = st.text_input("Enter email address to send test email",
-                                   placeholder="test@example.com")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔌 Test Connection", use_container_width=True):
-                with st.spinner("Testing connection..."):
-                    result = email_service.test_connection()
-                    if result.get("success"):
-                        st.success(f"✅ {result.get('message')}")
-                        if result.get("mode"):
-                            st.info(f"Mode: {result.get('mode')}")
-                        if result.get("smtp_host"):
-                            st.json({
-                                "SMTP Host": result.get("smtp_host"),
-                                "SMTP Port": result.get("smtp_port")
-                            })
-                    else:
-                        st.error(f"❌ {result.get('message')}")
-                        if result.get("error"):
-                            st.code(str(result.get("error")))
-
-        with col2:
-            if st.button("📧 Send Test Email", use_container_width=True, disabled=not test_email):
-                if not is_configured:
-                    st.error("Please configure Mailtrap credentials first")
-                elif not test_email:
-                    st.error("Please enter an email address")
-                else:
-                    with st.spinner("Sending test email..."):
-                        result = send_test_email(test_email)
-                        if result.get("success"):
-                            st.success(f"✅ {result.get('message')}")
-                            st.info(f"Sent via: {result.get('method', 'N/A')}")
-                        else:
-                            st.error(f"❌ {result.get('message')}")
-                            if result.get("error"):
-                                with st.expander("View error details"):
-                                    st.code(str(result.get("error")))
-
-        st.divider()
-
-        st.info("""
-        **📝 Note:**
-        - **Email Sending (API)**: Delivers real emails to recipients
-        - **Email Testing (SMTP)**: Captures emails in Mailtrap dashboard for testing
-        - For production, use Email Sending API or other services like SendGrid, AWS SES
-        """)
-
-    # ==========================================================================
-    # TAB 3: DATA MANAGEMENT
-    # ==========================================================================
-    with tab3:
         st.subheader("Data Management")
 
         stats = storage.get_stats()

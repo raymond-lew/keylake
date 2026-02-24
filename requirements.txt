@@ -11,6 +11,3 @@ httpx
 
 # Utilities
 python-dotenv
-
-# Email
-mailtrap
