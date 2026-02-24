@@ -5,9 +5,12 @@ streamlit
 pandas
 numpy
 
-# HTTP & API (optional)
+# HTTP & API
 requests
 httpx
 
 # Utilities
 python-dotenv
+
+# Email
+mailtrap
