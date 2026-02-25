@@ -1,5 +1,6 @@
 # Streamlit Frontend
 streamlit
+altair
 
 # Data Processing
 pandas

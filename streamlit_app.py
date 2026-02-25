@@ -3,6 +3,7 @@
 import streamlit as st
 from datetime import datetime, timedelta, date
 import pandas as pd
+import altair as alt
 
 from database.connection import storage
 
@@ -55,6 +56,25 @@ st.markdown("""
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+def create_bar_chart(data, x, y, title=None, height=300):
+    """Create a bar chart with readable x-axis labels"""
+    chart = alt.Chart(data).mark_bar().encode(
+        x=alt.X(f'{x}:N', axis=alt.Axis(labelAngle=0, labelOverlap=False)),
+        y=alt.Y(f'{y}:Q'),
+        tooltip=[x, y]
+    ).properties(
+        height=height
+    ).configure_axis(
+        labelFontSize=12,
+        titleFontSize=14
+    )
+    
+    if title:
+        chart = chart.properties(title=title)
+    
+    return st.altair_chart(chart, use_container_width=True)
+
 
 def get_company_name(company_id: str) -> str:
     """Get company name by ID"""
@@ -196,7 +216,7 @@ def show_dashboard():
         
         pipeline_df = pd.DataFrame(pipeline_data)
         if not pipeline_df.empty:
-            st.bar_chart(pipeline_df.set_index("Stage")["Deals"])
+            create_bar_chart(pipeline_df, "Stage", "Deals", height=250)
     
     with col2:
         st.subheader("🎯 Customer Health Distribution")
@@ -216,7 +236,7 @@ def show_dashboard():
         
         health_df = pd.DataFrame(health_data)
         if not health_df.empty:
-            st.bar_chart(health_df.set_index("Health")["Customers"])
+            create_bar_chart(health_df, "Health", "Customers", height=250)
 
 # ============================================================================
 # CONTACTS PAGE - FULL CRUD
@@ -1626,7 +1646,7 @@ def show_analytics():
                 for s in stages
             ]
             chart_df = pd.DataFrame({"Stage": [s.title() for s in stages], "Value": stage_values})
-            st.bar_chart(chart_df.set_index("Stage"))
+            create_bar_chart(chart_df, "Stage", "Value", height=250)
 
         with col2:
             st.subheader("Deals by Stage")
@@ -1634,7 +1654,7 @@ def show_analytics():
             stage_counts['Closed Won'] = len([d for d in deals if d.get('stage') == 'closed_won'])
             stage_counts['Closed Lost'] = len([d for d in deals if d.get('stage') == 'closed_lost'])
             stage_df = pd.DataFrame({"Stage": list(stage_counts.keys()), "Count": list(stage_counts.values())})
-            st.bar_chart(stage_df.set_index("Stage"))
+            create_bar_chart(stage_df, "Stage", "Count", height=250)
 
         st.markdown("---")
 
@@ -1651,7 +1671,7 @@ def show_analytics():
             count = sum(1 for d in deals if min_score <= d.get('health_score', 0) < max_score)
             health_data.append({"Health": name, "Deals": count})
         health_df = pd.DataFrame(health_data)
-        st.bar_chart(health_df.set_index("Health"))
+        create_bar_chart(health_df, "Health", "Deals", height=250)
 
     # ==========================================================================
     # TAB 3: CUSTOMER ANALYTICS
@@ -1697,7 +1717,7 @@ def show_analytics():
                     count = sum(1 for c in customers if min_score <= c.get('health_score', 0) < max_score)
                     health_data.append({"Health": name, "Customers": count})
                 health_df = pd.DataFrame(health_data)
-                st.bar_chart(health_df.set_index("Health"))
+                create_bar_chart(health_df, "Health", "Customers", height=250)
 
             with col2:
                 st.subheader("Churn Risk Distribution")
@@ -1705,7 +1725,7 @@ def show_analytics():
                 for risk in ['low', 'medium', 'high']:
                     churn_data[risk.title()] = len([c for c in customers if c.get('churn_risk') == risk])
                 churn_df = pd.DataFrame({"Risk Level": list(churn_data.keys()), "Customers": list(churn_data.values())})
-                st.bar_chart(churn_df.set_index("Risk Level"))
+                create_bar_chart(churn_df, "Risk Level", "Customers", height=250)
 
     # ==========================================================================
     # TAB 4: EMAIL ANALYTICS
@@ -1748,14 +1768,14 @@ def show_analytics():
                 categories = ['inquiry', 'support', 'sales', 'partnership', 'general']
                 cat_data = {cat: len([e for e in all_emails if e.get('category') == cat]) for cat in categories}
                 cat_df = pd.DataFrame({"Category": list(cat_data.keys()), "Count": list(cat_data.values())})
-                st.bar_chart(cat_df.set_index("Category"))
+                create_bar_chart(cat_df, "Category", "Count", height=250)
             
             with c2:
                 st.subheader("Emails by Sentiment")
                 sentiments = ['positive', 'neutral', 'negative']
                 sent_data = {s: len([e for e in all_emails if e.get('sentiment') == s]) for s in sentiments}
                 sent_df = pd.DataFrame({"Sentiment": list(sent_data.keys()), "Count": list(sent_data.values())})
-                st.bar_chart(sent_df.set_index("Sentiment"))
+                create_bar_chart(sent_df, "Sentiment", "Count", height=250)
             
             st.markdown("---")
             
