@@ -151,8 +151,7 @@ with st.sidebar:
             "🎉 Customers",
             "📧 Emails",
             "📅 Meetings",
-            "📈 Analytics",
-            "⚙️ Settings"
+            "📈 Analytics"
         ],
         label_visibility="collapsed"
     )
@@ -1815,54 +1814,12 @@ def show_analytics():
    
 
 # ============================================================================
-# SETTINGS PAGE
-# ============================================================================
-
-def show_settings():
-    """Display settings and configuration"""
-    st.title("⚙️ Settings")
-
-    tab1, tab2 = st.tabs(["General", "💾 Data"])
-
-    with tab1:
-        st.subheader("General Settings")
-
-        c1, c2 = st.columns(2)
-        with c1:
-            st.text_input("Company Name", "Acme Corp")
-            st.text_input("Industry", "Technology")
-        with c2:
-            st.text_input("Timezone", "UTC")
-            st.selectbox("Currency", ["USD", "EUR", "GBP", "JPY"])
-
-    # ==========================================================================
-    # TAB 2: DATA MANAGEMENT
-    # ==========================================================================
-    with tab2:
-        st.subheader("Data Management")
-
-        stats = storage.get_stats()
-        st.markdown("**Current Data:**")
-
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("Companies", stats.get('companies', 0))
-            st.metric("Contacts", stats.get('contacts', 0))
-        with c2:
-            st.metric("Deals", stats.get('deals', 0))
-            st.metric("Customers", stats.get('customers', 0))
-        with c3:
-            st.metric("Emails", stats.get('emails', 0))
-            st.metric("Meetings", stats.get('meetings', 0))
-        
-
-# ============================================================================
 # MAIN APP LOGIC
 # ============================================================================
 
 def main():
     """Main application"""
-    
+
     if page == "📊 Dashboard":
         show_dashboard()
     elif page == "👥 Contacts":
@@ -1877,8 +1834,6 @@ def main():
         show_meetings()
     elif page == "📈 Analytics":
         show_analytics()
-    elif page == "⚙️ Settings":
-        show_settings()
 
 
 if __name__ == "__main__":
